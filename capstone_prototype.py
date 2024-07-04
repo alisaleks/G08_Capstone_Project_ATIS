@@ -1,9 +1,31 @@
-import pandas as pd
-import streamlit as st
-import pydeck as pdk
-from datetime import datetime
-from capstone_scraping_script import scrape_all  # Import the scrape_all function
-from io import BytesIO
+# Install Chromium, ChromeDriver, and necessary libraries
+def install_chromium():
+    if not os.path.isfile('/usr/bin/chromium-browser'):
+        subprocess.run(['apt-get', 'update'])
+        subprocess.run(['apt-get', 'install', '-y', 'chromium-browser'])
+        subprocess.run(['apt-get', 'install', '-y', 'chromium-chromedriver'])
+        subprocess.run(['apt-get', 'install', '-y', 'libgbm-dev'])
+
+install_chromium()
+
+# Setup Selenium to use the installed Chromium
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+
+def initialize_browser():
+    print("Initializing browser...")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.binary_location = '/usr/bin/chromium-browser'
+    browser = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
+    return browser
 
 # Cache the scraping function to avoid redundant calls
 @st.cache_data
