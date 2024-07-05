@@ -1,4 +1,3 @@
-# System dependencies for scraping (adjust as needed)
 xvfb
 chromium-chromedriver
 libgconf-2-4
