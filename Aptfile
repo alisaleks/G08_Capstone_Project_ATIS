@@ -1,4 +1,10 @@
 libz-dev
 libjpeg-dev
-zlib1g-dev
-libpng-dev
+libfreetype6-dev
+liblcms2-dev
+libwebp-dev
+tcl8.6-dev
+tk8.6-dev
+libharfbuzz-dev
+libfribidi-dev
+libxcb1-dev
