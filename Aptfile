@@ -1,6 +1,6 @@
 # System dependencies for scraping (adjust as needed)
 xvfb
-chrome-chromedriver
+chromium-chromedriver
 libgconf-2-4
 libz-dev
 zlib1g-dev
