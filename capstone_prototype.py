@@ -2,8 +2,8 @@ import pandas as pd
 import streamlit as st
 import pydeck as pdk
 from datetime import datetime
-from capstone_scraping_script import scrape_all  # Import the scrape_all function
 from io import BytesIO
+from capstone_scraping_script import scrape_all  # Import the scrape_all function
 
 # Cache the scraping function to avoid redundant calls
 @st.cache_data
@@ -62,7 +62,7 @@ all_keywords = df['found_keywords'].explode().unique()
 
 def display_overview(df, location_column, date_columns):
     st.header("Company Overview")
-    
+
     st.markdown("""
     **Erlebniskontor GmbH** is a consultancy with over 25 years of expertise in creating and managing innovative visitor centers, brand worlds, and exhibitions. Specializing in the seamless integration of location, concept, and operation, the company ensures the success of tourism and cultural projects. With a focus on collaboration, they tailor experiences to meet the needs of clients and audiences alike. Services include comprehensive economic analyses, feasibility studies, and strategic planning to establish a solid foundation for each project.  
     **Current Challenge**  
@@ -76,10 +76,10 @@ def display_overview(df, location_column, date_columns):
     """)
 
     st.subheader("Filtered Tender Data")
-    
+
     selected_states = st.sidebar.multiselect("Filter by State", unique_states, default=['ALL'])
     selected_keywords = st.sidebar.multiselect("Filter by Keyword", options=['ALL'] + list(all_keywords), default=['ALL'])
-    
+
     for col in date_columns:
         date_range = st.sidebar.date_input(f"Filter by {col.replace('_', ' ').title()} Range", [])
         if len(date_range) == 2:
@@ -110,13 +110,12 @@ def display_overview(df, location_column, date_columns):
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
-
 def display_statistics(df, location_column):
     st.header("Statistics Summary")
 
     df['application_period'] = (pd.to_datetime(df['tender_deadline'], format="%d.%m.%y") - pd.to_datetime(df['application_start_date'], format="%d.%m.%y")).dt.days
     df['published_period'] = (datetime.now() - pd.to_datetime(df['date_published'], format="%d.%m.%y")).dt.days
-    
+
     stat_df = df.groupby(location_column).agg({
         'application_period': 'mean',
         'published_period': 'mean'
@@ -151,8 +150,6 @@ def display_statistics(df, location_column):
     selected_date_range = st.slider("Select Date Range", min_value=min_date, max_value=max_date, value=(min_date, max_date), format="YYYY-MM-DD")
     pub_dates_filtered = pub_dates[(pub_dates['Date'] >= selected_date_range[0]) & (pub_dates['Date'] <= selected_date_range[1])]
     st.line_chart(pub_dates_filtered.set_index('Date')['Count'])
-
-
 
 def display_map(df):
     st.header("Tender Locations on Map")
