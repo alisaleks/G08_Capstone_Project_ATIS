@@ -1,11 +1,18 @@
-libz-dev
-zlib1g-dev
-libjpeg-dev
-libfreetype6-dev
-liblcms2-dev
-libwebp-dev
-tcl8.6-dev
-tk8.6-dev
-libharfbuzz-dev
-libfribidi-dev
-libxcb1-dev
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    chrome-chromedriver \
+    libgconf-2-4 \
+    python3-pip
+
+# Install Python dependencies using pip
+RUN pip install -r requirements.txt
+
+# Configure web driver (optional)
+ENV CHROMEDRIVER_PATH=/usr/lib/chromium-browser/chromedriver
+
+# Copy your Streamlit application code
+COPY . /app
+
+# Run the Streamlit app (replace "main.py" with your actual filename)
+CMD ["streamlit", "run", "/app/main.py"]
