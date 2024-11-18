@@ -4,17 +4,69 @@ import pydeck as pdk
 from datetime import datetime
 from io import BytesIO
 from capstone_scraping_script import scrape_all  # Import the scrape_all function
+import glob
+import os
+os.environ["MAPBOX_API_KEY"] = "1234"
 
-# Cache the scraping function to avoid redundant calls
-@st.cache_data
 def fetch_latest_data():
-    return scrape_all()
+    # Define the output directory
+    output_dir = "master/2_streamlit/Capstone_ATIS_Streamlit"
 
-# Fetch the latest data
+    # Get a list of all CSV files in the directory
+    file_list = glob.glob(os.path.join(output_dir, "capstone_results_*.csv"))
+    
+    if file_list:
+        # Find the most recent file
+        latest_file = max(file_list, key=os.path.getmtime)
+        st.info(f"Loading data from the latest file")
+        return pd.read_csv(latest_file)
+    else:
+        st.info("No existing file found. Scraping new data...")
+        # Call your scraping function
+        df = scrape_all()
+        return df
 df = fetch_latest_data()
 
-# Replace "not specified" with NaN in the tender_deadline column
-df.replace({'tender_deadline': {"not specified": pd.NA}}, inplace=True)
+if st.button("Refresh Data"):
+    st.info("Scraping new data. Please wait...")
+    df = scrape_all()
+
+
+def convert_date(date):
+    if isinstance(date, pd.Timestamp):  # If it's already a Timestamp, return it as is
+        return date
+    date = str(date).strip()  # Convert to string and remove leading/trailing whitespace
+    if date in ['not specified', '', 'nan']:  # Handle 'not specified' and empty strings
+        return pd.NaT
+    try:
+        return pd.to_datetime(date, format="%d.%m.%y", errors='coerce')
+    except ValueError:
+        st.error(f"Error converting date: {date}")
+        return pd.NaT
+
+# Apply the conversion
+df['tender_deadline'] = df['tender_deadline'].apply(convert_date)
+
+# Other data processing steps remain the same
+def load_and_fix_dataframe(df):
+    df['application_start_date'] = df['application_start_date'].apply(convert_date)
+    df['date_published'] = df['date_published'].apply(convert_date)
+
+    # Drop rows where the date conversion failed
+    df = df.dropna(subset=['application_start_date', 'tender_deadline', 'date_published'], how='all')
+    
+    return df
+
+# Load and clean DataFrame
+df = load_and_fix_dataframe(df)
+
+# Fill missing values for datetime columns with pd.NaT
+datetime_columns = ['application_start_date', 'tender_deadline', 'date_published']
+df[datetime_columns] = df[datetime_columns].fillna(pd.NaT)
+
+# Fill missing values for non-datetime columns with "not specified"
+non_datetime_columns = df.columns.difference(datetime_columns)
+df[non_datetime_columns] = df[non_datetime_columns].fillna("not specified")
 
 # Convert date columns to datetime format
 date_columns = ['application_start_date', 'tender_deadline', 'date_published']
@@ -25,7 +77,7 @@ for col in date_columns:
 df['application_period'] = (df['tender_deadline'] - df['application_start_date']).dt.days
 df['published_period'] = (pd.Timestamp.now() - df['date_published']).dt.days
 
-# Add coordinates to the dataframe
+# Add coordinates to the dataframe based on state
 state_coordinates = {
     'Baden-Württemberg': {'latitude': 48.6616037, 'longitude': 9.3501336},
     'Bavaria': {'latitude': 48.7904472, 'longitude': 11.4978898},
@@ -45,10 +97,9 @@ state_coordinates = {
     'Thuringia': {'latitude': 50.9013853, 'longitude': 11.0772807},
 }
 
-# Add coordinates to the dataframe based on state
 def add_coordinates(df):
-    df['latitude'] = df['state'].apply(lambda x: state_coordinates[x]['latitude'] if x in state_coordinates else None)
-    df['longitude'] = df['state'].apply(lambda x: state_coordinates[x]['longitude'] if x in state_coordinates else None)
+    df['latitude'] = df['state'].apply(lambda x: state_coordinates.get(x, {}).get('latitude'))
+    df['longitude'] = df['state'].apply(lambda x: state_coordinates.get(x, {}).get('longitude'))
     return df
 
 df = add_coordinates(df)
@@ -57,10 +108,10 @@ df = add_coordinates(df)
 unique_states = ['ALL'] + list(df['state'].dropna().unique())
 
 # Get unique keywords
-df['found_keywords'] = df['found_keywords'].str.split(', ')
-all_keywords = df['found_keywords'].explode().unique()
+df['found_keywords'] = df['found_keywords'].fillna('').str.split(', ')
+all_keywords = df['found_keywords'].explode().dropna().unique()
 
-def display_overview(df, location_column, date_columns):
+def display_overview(df):
     st.header("Company Overview")
 
     st.markdown("""
@@ -87,14 +138,13 @@ def display_overview(df, location_column, date_columns):
             df = df[(df[col] >= pd.to_datetime(start_date)) & (df[col] <= pd.to_datetime(end_date))]
 
     if 'ALL' not in selected_states:
-        df = df[df[location_column].isin(selected_states)]
+        df = df[df['state'].isin(selected_states)]
     if 'ALL' not in selected_keywords:
         df = df[df['found_keywords'].apply(lambda x: any(kw in x for kw in selected_keywords))]
 
     st.dataframe(df)
     st.write(f"Number of rows: {df.shape[0]}")
 
-    # Create a function to download filtered data as Excel
     def to_excel(df):
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine='xlsxwriter')
@@ -110,13 +160,13 @@ def display_overview(df, location_column, date_columns):
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
-def display_statistics(df, location_column):
+def display_statistics(df):
     st.header("Statistics Summary")
 
     df['application_period'] = (pd.to_datetime(df['tender_deadline'], format="%d.%m.%y") - pd.to_datetime(df['application_start_date'], format="%d.%m.%y")).dt.days
     df['published_period'] = (datetime.now() - pd.to_datetime(df['date_published'], format="%d.%m.%y")).dt.days
 
-    stat_df = df.groupby(location_column).agg({
+    stat_df = df.groupby('state').agg({
         'application_period': 'mean',
         'published_period': 'mean'
     }).reset_index()
@@ -131,13 +181,13 @@ def display_statistics(df, location_column):
     criteria = st.radio("Select criteria for bar chart", ['State', 'Keywords by State'])
 
     if criteria == 'State':
-        bar_data = df.groupby(location_column).size().reset_index(name='count')
-        st.bar_chart(bar_data.set_index(location_column)['count'])
+        bar_data = df.groupby('state').size().reset_index(name='count')
+        st.bar_chart(bar_data.set_index('state')['count'])
     else:
         keyword_col = 'found_keywords'
-        bar_data = df[keyword_col].explode().groupby(df[location_column]).value_counts().reset_index(name='count')
-        bar_data.columns = [location_column, 'Keyword', 'count']
-        bar_data_pivot = bar_data.pivot(index='Keyword', columns=location_column, values='count').fillna(0)
+        bar_data = df[keyword_col].explode().groupby(df['state']).value_counts().reset_index(name='count')
+        bar_data.columns = ['state', 'Keyword', 'count']
+        bar_data_pivot = bar_data.pivot(index='Keyword', columns='state', values='count').fillna(0)
         st.bar_chart(bar_data_pivot)
 
     st.header("Publication Dates")
@@ -153,55 +203,64 @@ def display_statistics(df, location_column):
 
 def display_map(df):
     st.header("Tender Locations on Map")
-    if 'latitude' in df.columns and 'longitude' in df.columns:
-        df_map = df.dropna(subset=['latitude', 'longitude']).copy()
-        df_map['count'] = df_map.groupby(['latitude', 'longitude'])['tender_name'].transform('count')
-        st.pydeck_chart(
-            pdk.Deck(
-                map_style="mapbox://styles/mapbox/light-v9",
-                initial_view_state=pdk.ViewState(
-                    latitude=df_map["latitude"].mean(),
-                    longitude=df_map["longitude"].mean(),
-                    zoom=6,
-                    pitch=50,
+
+    # Ensure valid latitude and longitude
+    df_map = df.dropna(subset=['latitude', 'longitude']).copy()
+    df_map = df_map[(df_map['latitude'].notnull()) & (df_map['longitude'].notnull())]
+    # Fill NaN values based on the provided logic
+    df_map['application_start_date'] = df_map['application_start_date'].fillna(df_map['date_published'])
+    df_map['tender_deadline'] = df_map['tender_deadline'].fillna("not specified")
+    df_map['application_period'] = df_map['application_period'].fillna("not specified")
+
+    # Group by coordinates to get the count of tenders at each location
+    df_map['count'] = df_map.groupby(['latitude', 'longitude'])['tender_name'].transform('count')
+
+    # Create the map visualization
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style="mapbox://styles/mapbox/light-v9",
+            initial_view_state=pdk.ViewState(
+                latitude=df_map["latitude"].mean(),
+                longitude=df_map["longitude"].mean(),
+                zoom=6,
+                pitch=0,
+            ),
+            layers=[
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=df_map,
+                    get_position=["longitude", "latitude"],
+                    get_color=[200, 30, 0, 160],
+                    get_radius=10000,
+                    pickable=True,
+                    auto_highlight=True,
                 ),
-                layers=[
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=df_map,
-                        get_position=["longitude", "latitude"],
-                        get_color=[200, 30, 0, 160],
-                        get_radius=10000,
-                        pickable=True,
-                        auto_highlight=True,
-                    ),
-                    pdk.Layer(
-                        "TextLayer",
-                        data=df_map,
-                        get_position=["longitude", "latitude"],
-                        get_text="count",
-                        get_size=16,
-                        get_color=[0, 0, 0],
-                        get_alignment_baseline="'bottom'",
-                    ),
-                ],
-                tooltip={"text": "State: {state}\nNumber of Tenders: {count}"}
-            )
+                pdk.Layer(
+                    "TextLayer",
+                    data=df_map,
+                    get_position=["longitude", "latitude"],
+                    get_text="count",
+                    get_size=16,
+                    get_color=[0, 0, 0],
+                    get_alignment_baseline="'bottom'",
+                ),
+            ],
+            tooltip={"text": "State: {state}\nNumber of Tenders: {count}"}
         )
+    )
 
 def main():
     st.title("Automated Tender Identification System (ATIS)")
 
-    # Define the columns
     location_column = 'state'
     date_columns = ['application_start_date', 'tender_deadline', 'date_published']
 
     tab_overview, tab_stats, tab_map = st.tabs(["Overview", "Statistics", "Map"])
 
     with tab_overview:
-        display_overview(df, location_column, date_columns)
+        display_overview(df)
     with tab_stats:
-        display_statistics(df, location_column)
+        display_statistics(df)
     with tab_map:
         display_map(df)
 
