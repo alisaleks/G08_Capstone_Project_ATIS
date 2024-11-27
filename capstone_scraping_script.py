@@ -894,17 +894,6 @@ def paginate_and_scrape(browser):
             break
 
     return all_results
-def take_screenshot(browser, filename="screenshot.png"):
-    """
-    Captures a screenshot of the current browser state.
-    """
-    try:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{filename}_{timestamp}.png"
-        browser.save_screenshot(filename)
-        print(f"Screenshot saved as {filename}")
-    except Exception as e:
-        print(f"Failed to save screenshot: {e}")
 
 def perform_search(browser, keyword):
     try:
@@ -921,7 +910,6 @@ def perform_search(browser, keyword):
         )
         search_button.click()
         print("Search button clicked.")
-        take_screenshot(browser, f"post_search_{keyword}.png")
 
         # Wait for results to load
         WebDriverWait(browser, 60).until(
@@ -935,12 +923,92 @@ def scrape_dtvp(browser, url, keywords):
     print(f"Accessing {url}...")
     browser.get(url)
     handle_cookie_banner(browser)
+    all_tenders = {}  # Ensure this remains a dictionary
+    print(f"Initialized all_tenders as: {type(all_tenders)}")  # Debugging
+    if not isinstance(all_tenders, dict):
+        print("Error: all_tenders is not a dictionary after initialization.")
+        raise TypeError("Expected all_tenders to be a dictionary.")
+
     for keyword in keywords:
-        perform_search(browser, keyword)
-        results = paginate_and_scrape(browser)
-        print(f"Results for '{keyword}': {len(results)} entries.")
-        for result in results:
-            print(result)
+        try:
+            perform_search(browser, keyword)
+
+            while True:
+                try:
+                    # Wait for the results table to load
+                    WebDriverWait(browser, 120).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.border.col-lg-12"))
+                    )
+                    print(f"Processing results for keyword: {keyword}")
+                    time.sleep(60)  # Ensure content is fully loaded
+
+                    # Parse the current page's content
+                    html = browser.page_source
+                    soup = BeautifulSoup(html, 'html.parser')
+
+                    # Extract tenders from the table rows
+                    tender_rows = soup.select("div.border.col-lg-12")
+                    for row in tender_rows:
+                        try:
+                            # Extract tender details
+                            tender_name = row.find('h5').text.strip() if row.find('h5') else "not specified"
+                            tender_authority = row.find('span', class_='authority').text.strip() if row.find('span', class_='authority') else "not specified"
+                            tender_deadline = row.find('span', class_='deadline').text.strip() if row.find('span', class_='deadline') else "not specified"
+                            tender_type = row.find('span', class_='type').text.strip() if row.find('span', class_='type') else "not specified"
+                            date_published = row.find('span', class_='date').text.strip() if row.find('span', class_='date') else "not specified"
+
+                            # Format dates
+                            formatted_deadline = format_date(tender_deadline)
+                            formatted_date_published = format_date(date_published)
+
+                            # Add or update tenders in the dictionary
+                            if tender_name in all_tenders:
+                                if keyword not in all_tenders[tender_name]['found_keywords']:
+                                    all_tenders[tender_name]['found_keywords'] += f", {keyword}"
+                            else:
+                                tender_details = {
+                                    'tender_name': tender_name,
+                                    'tender_authority': tender_authority,
+                                    'tender_type': tender_type,
+                                    'tender_deadline': formatted_deadline,
+                                    'date_published': formatted_date_published,
+                                    'source_url': url,
+                                    'found_keywords': keyword  # Initialize with the searched keyword
+                                }
+                                all_tenders[tender_name] = tender_details
+
+                        except Exception as e:
+                            print(f"An error occurred while parsing row: {e}")
+
+                    # Check for the next page
+                    next_page = soup.find('a', {'title': 'Nächste Seite'})
+                    if next_page and 'disabled' not in next_page.get('class', []):
+                        next_url = urljoin(url, next_page['href'])
+                        print(f"Navigating to the next page: {next_url}")
+                        browser.get(next_url)
+                    else:
+                        break
+
+                except TimeoutException:
+                    print(f"Timeout while processing results for keyword: {keyword}")
+                    break
+
+        except TimeoutException:
+            print(f"Timeout while searching for keyword: {keyword}")
+        except NoSuchElementException:
+            print(f"No element found for keyword: {keyword}")
+        except ElementNotInteractableException:
+            print(f"Element not interactable for keyword: {keyword}")
+        except Exception as e:
+            print(f"An error occurred while searching for keyword: {keyword} - {str(e)}")
+    if not isinstance(all_tenders, dict):
+        print(f"Type mismatch: all_tenders is a {type(all_tenders)}")
+        raise TypeError("all_tenders must be a dictionary")
+
+    tenders = list(all_tenders.values())  # This will work as long as all_tenders is not a list
+    total_tenders = len(tenders)
+    print(f"Total tenders found for DTVP: {total_tenders}")
+    return tenders
 
 def scrape_niedersachsen(browser, url, keywords, source_url):
     print(f"Scraping dynamic content from {url}...")
@@ -1277,6 +1345,9 @@ def scrape_saarvpsl(browser, url, keywords, source_url):
 def scrape_e_vergabe_sh(browser, url, keywords, source_url):
     print(f"Scraping dynamic content from {url}...")
     all_tenders = {}
+
+    tenders = list(all_tenders.values())
+
     browser.get(url)
 
     for keyword in keywords:
@@ -1357,9 +1428,12 @@ def scrape_e_vergabe_sh(browser, url, keywords, source_url):
 
 def scrape_website(url):
     print(f"Fetching content from {url}...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
         return response.text
     except requests.HTTPError as http_err:
         print(f"HTTP error occurred: {http_err}")
@@ -1377,16 +1451,24 @@ def scrape_site(site_info):
                 "Besucherinformationszentrum", "Gutachten"]
     
     if "myorder.rib.de" in source_url:
-        tenders = scrape_bayern_selenium(initialize_browser(), url, keywords, source_url)
+            tenders = scrape_bayern_selenium(initialize_browser(), url, keywords, source_url)
     elif "vmstart" in source_url or "saarvpsl.vmstart.de" in source_url:
         tenders = globals()[scrape_func](initialize_browser(), url, keywords, source_url)
     elif "vergabe.rlp.de" in source_url or "evergabe.nrw.de" in source_url or "vergabe.metropoleruhr.de" in source_url or "vergabe.niedersachsen.de" in source_url or "vergabemarktplatz.brandenburg.de" in source_url or "e-vergabe-sh.de" in source_url:
         tenders_dict = globals()[scrape_func](initialize_browser(), url, keywords, source_url)
         tenders = [tender for tender in tenders_dict.values()]
-    else:
+    elif "dtvp.de" in source_url:  # Explicitly handle DTTP scraping
+        tenders = scrape_dtvp(initialize_browser(), url, keywords)
+    else:  # For static scraping
         html = scrape_website(url)
         if html:
-            tenders = globals()[scrape_func](html, keywords, source_url)
+            scrape_function = globals().get(scrape_func)
+            if scrape_function and callable(scrape_function):
+                tenders = scrape_function(html, keywords, source_url)
+            else:
+                print(f"Invalid scrape function: {scrape_func}")
+                raise ValueError(f"Scrape function {scrape_func} is not callable or undefined.")
+    
     return tenders
 def load_and_fix_dataframe(df):
     # Check and convert 'application_start_date' to a consistent datetime format
