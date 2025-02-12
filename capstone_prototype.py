@@ -7,7 +7,7 @@ from capstone_scraping_script import scrape_all  # Import the scrape_all functio
 import glob
 import os
 os.environ["MAPBOX_API_KEY"] = "1234"
-@st.cache_data(ttl=3600)  # Cache latest filename, refresh every hour
+@st.cache_data(show_spinner=False, persist=False)  # Disable local storage caching
 def get_latest_filename():
     output_dir = "master/2_streamlit/Capstone_ATIS_Streamlit"
     file_list = glob.glob(os.path.join(output_dir, "capstone_results_*.csv"))
@@ -17,22 +17,22 @@ def get_latest_filename():
     return None  # No cached file found
 
 def fetch_latest_data():
-    latest_file = get_latest_filename()  # Get latest cached filename
+    output_dir = "master/2_streamlit/Capstone_ATIS_Streamlit"
+
+    # Get a list of all CSV files in the directory
+    file_list = glob.glob(os.path.join(output_dir, "capstone_results_*.csv"))
+
+    if file_list:
+        # Find the most recent file
+        latest_file = max(file_list, key=os.path.getmtime)
+        st.info(f" Loading data from: {latest_file}")
+        df = pd.read_csv(latest_file)
+    else:
+        st.info(" No existing file found. Scraping new data...")
+        df = scrape_all()  # Call your scraping function
     
-    if latest_file and os.path.exists(latest_file):
-        st.info(f"Loading cached data from: {latest_file}")
-        try:
-            return pd.read_csv(latest_file)
-        except Exception as e:
-            st.error(f"⚠️ Error loading CSV file: {e}")
-            return pd.DataFrame()  # Return empty DataFrame if file is corrupted
-    
-    st.info("No cached data found. Scraping new data...")
-    df = scrape_all()  # Call the scraping function if no cached file
     return df
-
 df = fetch_latest_data()
-
 if st.button("Refresh Data"):
     st.info("Scraping new data. Please wait...")
     df = scrape_all()
