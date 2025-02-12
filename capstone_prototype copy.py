@@ -10,14 +10,28 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 def initialize_browser():
+    # Setup Chrome options
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
-    print("Browser initialized successfully.")
-    return driver
+    chrome_options.add_argument("--headless")  # Run in headless mode (necessary for cloud)
+    chrome_options.add_argument("--no-sandbox")  # Required for Streamlit Cloud
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resources
+    chrome_options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
+
+    # Explicitly set Chrome binary path (for Streamlit Cloud)
+    chrome_bin_path = "/usr/bin/chromium-browser"
+    if os.path.exists(chrome_bin_path):
+        chrome_options.binary_location = chrome_bin_path
+
+    # Define ChromeDriver path
+    chromedriver_path = "/usr/bin/chromedriver"
+    if os.path.exists(chromedriver_path):
+        service = ChromeService(chromedriver_path)
+    else:
+        service = ChromeService(ChromeDriverManager().install())  # Fallback if not found
+
+    # Initialize WebDriver
+    browser = webdriver.Chrome(service=service, options=chrome_options)
+    return browser
 
 def handle_cookie_banner(browser):
     try:

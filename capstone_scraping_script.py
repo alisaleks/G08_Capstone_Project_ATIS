@@ -126,30 +126,30 @@ def download_chromedriver(chrome_version):
 
 # Function to download and initialize the ChromeDriver
 def initialize_browser():
-    # Set up Chrome options
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run Chrome in headless mode
-    chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
-    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource issues
-    chrome_options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
-    chrome_options.add_argument("--remote-debugging-port=9222")  # Enable debugging
+    chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--no-sandbox")  
+    chrome_options.add_argument("--disable-dev-shm-usage")  
+    chrome_options.add_argument("--disable-gpu")  
 
-    # Set correct path for Chrome binary
-    chrome_bin = "/usr/bin/chromium-browser"  # Path for Streamlit Cloud
-    if os.path.exists(chrome_bin):
-        chrome_options.binary_location = chrome_bin
+    # Explicitly set Chrome binary path for cloud environments
+    chrome_bin_path = "/usr/bin/chromium-browser"
+    if os.path.exists(chrome_bin_path):
+        chrome_options.binary_location = chrome_bin_path
 
-    # Use ChromeDriver installed via package manager
-    driver_path = "/usr/bin/chromedriver"
-    if os.path.exists(driver_path):
-        service = ChromeService(driver_path)
+    # Define ChromeDriver path
+    chromedriver_path = "/usr/bin/chromedriver"
+    if os.path.exists(chromedriver_path):
+        service = ChromeService(chromedriver_path)
     else:
-        service = ChromeService(ChromeDriverManager().install())  # Fallback
+        service = ChromeService(ChromeDriverManager().install())  
 
-    # Initialize WebDriver
+    print(f"Using Chrome binary at: {chrome_options.binary_location}")
+    print(f"Using ChromeDriver at: {service.path}")
+
     browser = webdriver.Chrome(service=service, options=chrome_options)
-    
     return browser
+
 
 # Directory setup for saving results
 def ensure_output_directory(output_dir):
@@ -1536,13 +1536,19 @@ def scrape_all():
 
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_url = {executor.submit(scrape_site, (url, scrape_func, source_url)): url for url, (scrape_func, source_url) in websites.items()}
+        future_to_url = {
+            executor.submit(scrape_site, (url, scrape_func, source_url)): url 
+            for url, (scrape_func, source_url) in websites.items()
+        }
+
         for future in concurrent.futures.as_completed(future_to_url):
             try:
                 tenders = future.result()
                 results.extend(tenders)
             except Exception as exc:
-                print(f"An error occurred: {exc}")
+                url = future_to_url[future]
+                print(f"Error scraping {url}: {exc}")
+
 
     # Consolidate keywords for the same tender
     unique_tenders = {}
