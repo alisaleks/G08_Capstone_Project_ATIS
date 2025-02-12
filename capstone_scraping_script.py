@@ -128,11 +128,14 @@ def download_chromedriver(chrome_version):
 def initialize_browser(browser_type="chrome"):
     if browser_type.lower() == "chrome":
         chrome_options = Options()
+        # **Important**: using "--headless=new" ensures compatibility on Streamlit Cloud
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
+        # Debugging port helps prevent crashes in some cloud environments
         chrome_options.add_argument("--remote-debugging-port=9222")
+
         # Check for available Chrome binary
         if os.path.exists("/usr/bin/google-chrome"):
             chrome_options.binary_location = "/usr/bin/google-chrome"
