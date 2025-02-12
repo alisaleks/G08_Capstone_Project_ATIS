@@ -128,12 +128,13 @@ def download_chromedriver(chrome_version):
 def initialize_browser(browser_type="chrome"):
     if browser_type.lower() == "chrome":
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless")          # run headless
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
-        # If needed, specify the binary location (this path works on many Linux systems)
+        # Specify binary location if needed (this may vary on Streamlit Cloud)
         chrome_options.binary_location = "/usr/bin/chromium-browser"
+        
         browser = webdriver.Chrome(
             service=ChromeService(ChromeDriverManager().install()),
             options=chrome_options
