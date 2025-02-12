@@ -7,7 +7,7 @@ from capstone_scraping_script import scrape_all  # Import the scrape_all functio
 import glob
 import os
 os.environ["MAPBOX_API_KEY"] = "1234"
-@st.cache_data(show_spinner=False, persist=False)  # Disable local storage caching
+@st.cache_data(show_spinner=False)
 def get_latest_filename():
     output_dir = "master/2_streamlit/Capstone_ATIS_Streamlit"
     file_list = glob.glob(os.path.join(output_dir, "capstone_results_*.csv"))
@@ -17,6 +17,7 @@ def get_latest_filename():
     return None  # No cached file found
 
 def fetch_latest_data():
+    """Fetch the latest CSV file or scrape new data if none exists."""
     output_dir = "master/2_streamlit/Capstone_ATIS_Streamlit"
 
     # Get a list of all CSV files in the directory
@@ -25,13 +26,14 @@ def fetch_latest_data():
     if file_list:
         # Find the most recent file
         latest_file = max(file_list, key=os.path.getmtime)
-        st.info(f" Loading data from: {latest_file}")
+        st.info(f"📂 Loading data from: {latest_file}")
         df = pd.read_csv(latest_file)
     else:
-        st.info(" No existing file found. Scraping new data...")
+        st.info("🔍 No existing file found. Scraping new data...")
         df = scrape_all()  # Call your scraping function
     
     return df
+
 df = fetch_latest_data()
 if st.button("Refresh Data"):
     st.info("Scraping new data. Please wait...")

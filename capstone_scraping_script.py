@@ -125,36 +125,22 @@ def download_chromedriver(chrome_version):
     print("ChromeDriver downloaded and extracted successfully.")
 
 # Function to download and initialize the ChromeDriver
-def initialize_browser():
-    """Initialize Chrome WebDriver for headless mode in Streamlit Cloud."""
-    chrome_options = Options()
-    
-    # Run Chrome in headless mode
-    chrome_options.add_argument("--headless")  
-    chrome_options.add_argument("--no-sandbox")  
-    chrome_options.add_argument("--disable-dev-shm-usage")  
-    chrome_options.add_argument("--disable-gpu")  
-    chrome_options.add_argument("--remote-debugging-port=9222")
-
-    # Check if Chrome binary exists (for Streamlit Cloud)
-    chrome_bin_path = "/usr/bin/chromium-browser"
-    if os.path.exists(chrome_bin_path):
-        chrome_options.binary_location = chrome_bin_path
-
-    # Check if chromedriver exists, otherwise download using WebDriver Manager
-    chromedriver_path = "/usr/bin/chromedriver"
-    if os.path.exists(chromedriver_path):
-        service = ChromeService(chromedriver_path)
+def initialize_browser(browser_type="chrome"):
+    if browser_type.lower() == "chrome":
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        # If needed, specify the binary location (this path works on many Linux systems)
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        browser = webdriver.Chrome(
+            service=ChromeService(ChromeDriverManager().install()),
+            options=chrome_options
+        )
     else:
-        service = ChromeService(ChromeDriverManager().install())
-
-    try:
-        browser = webdriver.Chrome(service=service, options=chrome_options)
-        return browser
-    except Exception as e:
-        print(f"❌ WebDriver Error: {e}")
-        return None  # Return None if browser fails to start
-
+        raise ValueError("Unsupported browser type: use 'chrome'")
+    return browser
 
 # Directory setup for saving results
 def ensure_output_directory(output_dir):
