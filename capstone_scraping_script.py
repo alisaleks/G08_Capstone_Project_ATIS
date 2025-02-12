@@ -126,29 +126,34 @@ def download_chromedriver(chrome_version):
 
 # Function to download and initialize the ChromeDriver
 def initialize_browser():
+    """Initialize Chrome WebDriver for headless mode in Streamlit Cloud."""
     chrome_options = Options()
+    
+    # Run Chrome in headless mode
     chrome_options.add_argument("--headless")  
     chrome_options.add_argument("--no-sandbox")  
     chrome_options.add_argument("--disable-dev-shm-usage")  
     chrome_options.add_argument("--disable-gpu")  
+    chrome_options.add_argument("--remote-debugging-port=9222")
 
-    # Explicitly set Chrome binary path for cloud environments
+    # Check if Chrome binary exists (for Streamlit Cloud)
     chrome_bin_path = "/usr/bin/chromium-browser"
     if os.path.exists(chrome_bin_path):
         chrome_options.binary_location = chrome_bin_path
 
-    # Define ChromeDriver path
+    # Check if chromedriver exists, otherwise download using WebDriver Manager
     chromedriver_path = "/usr/bin/chromedriver"
     if os.path.exists(chromedriver_path):
         service = ChromeService(chromedriver_path)
     else:
-        service = ChromeService(ChromeDriverManager().install())  
+        service = ChromeService(ChromeDriverManager().install())
 
-    print(f"Using Chrome binary at: {chrome_options.binary_location}")
-    print(f"Using ChromeDriver at: {service.path}")
-
-    browser = webdriver.Chrome(service=service, options=chrome_options)
-    return browser
+    try:
+        browser = webdriver.Chrome(service=service, options=chrome_options)
+        return browser
+    except Exception as e:
+        print(f"❌ WebDriver Error: {e}")
+        return None  # Return None if browser fails to start
 
 
 # Directory setup for saving results
